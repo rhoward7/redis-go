@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -25,13 +26,17 @@ func main() {
 	}
 	defer conn.Close()
 
-	reader := bufio.NewReader(conn)
-	for {
-		_, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Connection closed:", err)
-			return
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println("Received:", line)
+
+		if strings.ToUpper(line) == "PING" {
+			conn.Write([]byte("+PONG\r\n"))
 		}
-		conn.Write([]byte("+PONG\r\n"))
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error:", err)
 	}
 }
