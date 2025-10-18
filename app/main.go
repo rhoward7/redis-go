@@ -30,7 +30,7 @@ func readRESPCommand(reader *bufio.Reader) (string, []string, error) {
 
 	parts := make([]string, 0, count)
 
-	for i := 0; i < count; i++ {
+	for range count {
 		// Expect a bulk string header: $<len>\r\n
 		header, err := reader.ReadString('\n')
 		//$4\r\nECHO\r
