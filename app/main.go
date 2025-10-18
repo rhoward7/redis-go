@@ -10,6 +10,20 @@ import (
 	"strings"
 )
 
+var db = make(map[string]string)
+
+func set(key, value string) {
+	db[key] = value
+}
+
+func get(key string) string {
+	return db[key]
+}
+
+func bulkString(msg string) []byte {
+	return fmt.Appendf(nil, "$%d\r\n%s\r\n", len(msg), msg)
+}
+
 func readRESPCommand(reader *bufio.Reader) (string, []string, error) {
 	// *2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n
 	line, err := reader.ReadString('\n')
@@ -88,7 +102,13 @@ func handleConnection(conn net.Conn) {
 			conn.Write([]byte("+PONG\r\n"))
 		case "ECHO":
 			msg := args[0]
-			conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), msg)))
+			conn.Write(bulkString(msg))
+		case "SET":
+			set(args[0], args[1])
+			fmt.Fprintf(conn, "+OK\r\n") // conn.write more performant but can do this
+		case "GET":
+			val := get(args[0])
+			conn.Write(bulkString(val))
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
