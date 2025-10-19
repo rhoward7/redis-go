@@ -8,16 +8,41 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
-var db = make(map[string]string)
-
-func set(key, value string) {
-	db[key] = value
+type entry struct {
+	value     string
+	expiresAt time.Time // zero if no expiry
 }
 
-func get(key string) string {
-	return db[key]
+var db = make(map[string]entry)
+
+func set(key, value string, ttl time.Duration) {
+	var exp time.Time
+	if ttl > 0 {
+		exp = time.Now().Add(ttl)
+	}
+
+	db[key] = entry{
+		value:     value,
+		expiresAt: exp,
+	}
+}
+
+func get(key string) (string, bool) {
+	e, ok := db[key]
+	if !ok {
+		return "", false
+	}
+
+	// Check expiry
+	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
+		delete(db, key) // remove expired key
+		return "", false
+	}
+
+	return e.value, true
 }
 
 func bulkString(msg string) []byte {
@@ -104,11 +129,29 @@ func handleConnection(conn net.Conn) {
 			msg := args[0]
 			conn.Write(bulkString(msg))
 		case "SET":
-			set(args[0], args[1])
-			fmt.Fprintf(conn, "+OK\r\n") // conn.write more performant but can do this
+			key := args[0]
+			val := args[1]
+			var ttl time.Duration
+
+			if len(args) >= 4 {
+				switch strings.ToUpper(args[2]) {
+				case "EX":
+					seconds, _ := strconv.Atoi(args[3])
+					ttl = time.Duration(seconds) * time.Second
+				case "PX":
+					ms, _ := strconv.Atoi(args[3])
+					ttl = time.Duration(ms) * time.Millisecond
+				}
+			}
+
+			set(key, val, ttl)
+			conn.Write([]byte("+OK\r\n")) // conn.write more performant but can do this
 		case "GET":
-			val := get(args[0])
-			conn.Write(bulkString(val))
+			if val, ok := get(args[0]); ok {
+				conn.Write(bulkString(val))
+			} else {
+				conn.Write([]byte("$-1\r\n")) // Redis nil
+			}
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
