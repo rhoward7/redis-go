@@ -38,7 +38,7 @@ func get(key string) (string, bool) {
 
 	// Check expiry
 	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
-		delete(db, key) // remove expired key
+		delete(db, key)
 		return "", false
 	}
 
